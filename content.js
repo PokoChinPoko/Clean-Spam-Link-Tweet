@@ -356,6 +356,7 @@ function main(filter_url, imp_filter_url) {
                     look_profile_spam_block: false,
                     reprint_manga_spam_block: false,
                     reprint_manga_spam_block_strict: false,
+                    auto_report: false,
                     reprint_manga_spam_block_root_user_disable: true,
                     reprint_manga_spam_area_option: "0",
                     affiliate_spam_block: false,
@@ -1731,375 +1732,7 @@ function main(filter_url, imp_filter_url) {
                     }
                     //報告ボタン動作
                     document.getElementById(random_id)?.addEventListener("click", async function () {
-                        let get_cookie_twid = null;
-                        //ログインユーザーID取得
-                        if (is_use_cookie_mode()) {
-                            get_cookie_twid = decodeURIComponent(document.cookie.split(";").find(cookie => /twid=/.test(cookie))).replace("twid=u=", "");
-                        } else {
-                            get_cookie_twid = await new Promise((resolve) => {
-                                chrome.runtime.sendMessage({ message: { mode: "login_userid_get", target: { target_host_mode: location.host } } }, (response) => {
-                                    resolve(decodeURIComponent(response).replace("u=", ""));
-                                });
-                            });
-                        }
-                        //
-                        let report_confirm = false;
-                        if (cslp_settings.oneclick_report_confirm == true) {
-                            if (confirm("操作を実行しますか?")) {
-                                report_confirm = true;
-                            }
-                        } else {
-                            report_confirm = true;
-                        }
-                        if (report_confirm == true) {
-                            const report_srvurl = cslp_settings.oneclick_developer_reportsrv_url;
-                            //console.log(random_id);
-                            const target_element = this.closest('[data-testid="cellInnerDiv"]');
-                            //console.log(target_element)
-                            let tweet_info = null;
-                            switch (btn_mode) {
-                                case "notification":
-                                    tweet_info = notification_user_page_data;
-                                    break;
-                                case "user_page":
-                                    tweet_info = notification_user_page_data;
-                                    //console.log(this)
-                                    break;
-                                default:
-                                    tweet_info = JSON.parse(target_element.getAttribute("cslt_tweet_info"));
-                                    break;
-                            }
-                            /*if(btn_mode != "notification"){
-                                tweet_info = JSON.parse(target_element.getAttribute("cslt_tweet_info"));
-                            }else{
-                                tweet_info = notification_user_page_data;
-                            }*/
-                            let report_result = false;
-                            let block_mute_result = false;
-                            let fail_report_success_bm = false;
-                            //CSLT側の非表示リスト追加用処理
-                            let add_hide_user_list_scr_name = null;
-                            if (cslp_settings.oneclick_report_add_cslt_hideuser) {
-                                add_hide_user_list_scr_name = tweet_info.user_data.scr_name;
-                            }
-                            
-                            //console.log(get_cookie_twid)
-                            if (get_cookie_twid != tweet_info.user_data.user_id || cslp_settings.oneclick_report_after_mode == '3' || cslp_settings.oneclick_report_after_mode == '4' || cslp_settings.oneclick_report_after_mode == '5') {
-                                if (cslp_settings.oneclick_report == true) {
-                                    if (Number(cslp_settings.oneclick_report_after_mode) <= 2) {
-                                        //報告処理
-                                        if (is_community_page != true) {
-                                            //コミュニティ内ではない場合
-                                            const report_tweet_run = await new Promise((resolve) => {
-                                                //console.log(tweet_info.tweet_id)
-                                                //console.log(tweet_info)
-                                                if (!is_follow_page()) {
-                                                    switch (btn_mode) {
-                                                        case "notification":
-                                                            report_tweet(cslp_settings.oneclick_report_option, target_element, tweet_info.user_data.user_id, location.host,"user", true, tweet_info).then((report_status) => {
-                                                                resolve(report_status);
-                                                            });
-                                                            break;
-                                                        case "user_page":
-                                                            report_tweet(cslp_settings.oneclick_report_option, target_element, tweet_info.user_data.user_id, location.host,"none", true, tweet_info).then((report_status) => {
-                                                                resolve(report_status);
-                                                            });
-                                                            break;
-                                                        default:
-                                                            switch (cslp_settings.oneclick_report_target_mode) {
-                                                                case "0":
-                                                                    if(tweet_info?.is_user_data_only != undefined){
-                                                                        if(!tweet_info.is_user_data_only){
-                                                                            cslt_message_display("投稿の報告のみを行います", "message");
-                                                                            report_tweet(cslp_settings.oneclick_report_option, target_element, tweet_info.tweet_id, location.host,"none", false, null).then((report_status) => {
-                                                                                resolve(report_status);
-                                                                            });
-                                                                        }else{
-                                                                            cslt_message_display("ユーザーの報告のみを行います", "message");
-                                                                            report_tweet(cslp_settings.oneclick_report_option, target_element, tweet_info.user_data.user_id, location.host,"user", false, null).then((report_status) => {
-                                                                                resolve(report_status);
-                                                                            });
-                                                                        }
-                                                                    }
-                                                                    
-                                                                    break;
-                                                                case "1":
-                                                                    cslt_message_display("ユーザーの報告のみを行います", "message");
-                                                                    report_tweet(cslp_settings.oneclick_report_option, target_element, tweet_info.user_data.user_id, location.host,"user", false, null).then((report_status) => {
-                                                                        resolve(report_status);
-                                                                    });
-                                                                    break;
-                                                                case "2":
-                                                                    if(tweet_info?.is_user_data_only != undefined){
-                                                                        if(!tweet_info.is_user_data_only){
-                                                                            //返信報告
-                                                                            report_tweet(cslp_settings.oneclick_report_option, target_element, tweet_info.tweet_id, location.host,"none", false, null).then((report_status) => {
-                                                                                cslt_message_display("ユーザーの報告を行います", "message");
-                                                                                //ユーザー報告
-                                                                                report_tweet(cslp_settings.oneclick_report_option, target_element, tweet_info.user_data.user_id, location.host,"user", false, null).then((report_status) => {
-                                                                                    resolve(report_status);
-                                                                                });
-                                                                            });
-                                                                        }else{
-                                                                            cslt_message_display("ユーザーの報告のみを行います", "message");
-                                                                            report_tweet(cslp_settings.oneclick_report_option, target_element, tweet_info.user_data.user_id, location.host,"user", false, null).then((report_status) => {
-                                                                                resolve(report_status);
-                                                                            });
-                                                                        }
-                                                                    }else{
-                                                                        //console.log("isReplyNotFound")
-                                                                    }
-                                                                    break;
-                                                                default:
-                                                                    report_tweet(cslp_settings.oneclick_report_option, target_element, tweet_info.tweet_id, location.host,"none", false, null).then((report_status) => {
-                                                                        resolve(report_status);
-                                                                    });
-                                                                    break;
-                                                            }
-                                                            break;
-                                                    }
-                                                } else {
-                                                    //フォロー欄などのユーザーを報告した場合
-                                                    cslt_message_display("ユーザーの報告のみを行います", "message");
-                                                    report_tweet(cslp_settings.oneclick_report_option, target_element, tweet_info.user_data.user_id, location.host,"user", false, null).then((report_status) => {
-                                                        resolve(report_status);
-                                                    });
-                                                }
-                                            });
-                                            if (report_tweet_run != true) {
-                                                this.classList.add("cslt_report_fail");
-                                            } else {
-                                                report_result = true;
-                                            }
-                                        } else {
-                                            //コミュニティ内である場合
-                                            const report_tweet_run = await new Promise((resolve) => {
-                                                //
-                                                switch (cslp_settings.oneclick_report_target_mode) {
-                                                    case "0":
-                                                        cslt_message_display("投稿の報告のみを行います", "message");
-                                                            report_tweet_community(cslp_settings.oneclick_report_option, target_element, tweet_info.tweet_id, location.host).then((report_status) => {
-                                                                resolve(report_status);
-                                                            });
-                                                        break;
-                                                    case "1":
-                                                        cslt_message_display("ユーザーの報告のみを行います", "message");
-                                                        report_tweet(cslp_settings.oneclick_report_option, target_element, tweet_info.user_data.user_id, location.host,"user", false, null).then((report_status) => {
-                                                            resolve(report_status);
-                                                        });
-                                                        break;
-                                                    case "2":
-                                                        if(tweet_info?.is_user_data_only != undefined){
-                                                            if(!tweet_info.is_user_data_only){
-                                                                report_tweet_community(cslp_settings.oneclick_report_option, target_element, tweet_info.tweet_id, location.host).then((report_status) => {
-                                                                    //ユーザー報告
-                                                                    report_tweet(cslp_settings.oneclick_report_option, target_element, tweet_info.user_data.user_id, location.host,"user", false, null).then((report_status) => {
-                                                                        resolve(report_status);
-                                                                    });
-                                                                });
-                                                            }else{
-                                                                cslt_message_display("ユーザーの報告のみを行います", "message");
-                                                                report_tweet(cslp_settings.oneclick_report_option, target_element, tweet_info.user_data.user_id, location.host,"user", false, null).then((report_status) => {
-                                                                    resolve(report_status);
-                                                                });
-                                                            }
-                                                        }
-                                                        break;
-                                                    default:
-                                                        report_tweet_community(cslp_settings.oneclick_report_option, target_element, tweet_info.tweet_id, location.host).then((report_status) => {
-                                                            resolve(report_status);
-                                                        });
-                                                        break;
-                                                }
-                                                /*
-                                                report_tweet_community(cslp_settings.oneclick_report_option, target_element, tweet_info.tweet_id, location.host).then((report_status) => {
-                                                    resolve(report_status);
-                                                });*/
-                                            });
-                                            //console.log(report_tweet_run);
-                                            if (report_tweet_run != true) {
-                                                this.classList.add("cslt_report_fail");
-                                            } else {
-                                                report_result = true;
-                                            }
-                                        }
-                                        //報告完了IDを保存
-                                        if (report_result == true) {
-                                            report_ids_temp(tweet_info.tweet_id, "report");
-                                        }
-                                        //
-                                        if (cslp_settings.oneclick_report_after_mode == "1") {
-                                            //const tweet_info = JSON.parse(target_element.getAttribute("cslt_tweet_info"));
-                                            //console.log(target_element.getAttribute("cslt_tweet_info"));
-                                            const mute_tweet_run = await new Promise((resolve) => {
-                                                mute_user(tweet_info.user_data.user_id, add_hide_user_list_scr_name, location.host).then((report_status) => {
-                                                    resolve(report_status);
-                                                });
-                                            });
-                                            if (mute_tweet_run != true) {
-                                                this.classList.add("cslt_report_fail");
-                                            } else {
-                                                block_mute_result = true;
-                                            }
-                                            //ミュート済ユーザーIDを保存
-                                            if (mute_tweet_run == true) {
-                                                report_ids_temp(tweet_info.user_data.user_id, "block_mute");
-                                            }
-                                            //
-                                        }
-                                        if (cslp_settings.oneclick_report_after_mode == "2") {
-                                            //const tweet_info = JSON.parse(target_element.getAttribute("cslt_tweet_info"));
-                                            //console.log(target_element.getAttribute("cslt_tweet_info"));
-                                            const block_user_run = await new Promise((resolve) => {
-                                                block_user(tweet_info.user_data.user_id, add_hide_user_list_scr_name, location.host).then((resp) => {
-                                                    resolve(resp);
-                                                });
-                                            });
-                                            if (block_user_run == true) {
-                                                block_mute_result = true;
-                                            }
-                                            //console.log(block_user_run)
-                                            //ブロック済ユーザーIDを保存
-                                            if (block_user_run == true) {
-                                                report_ids_temp(tweet_info.user_data.user_id, "block_mute");
-                                            }
-                                            //
-                                        }
-                                        if (cslp_settings.oneclick_developer_report == true) {
-                                            //開発者情報提供
-                                            if (!tweet_info?.is_user_data_only && btn_mode != "notification" && is_follow_page() == false) {
-                                                developer_spam_user_share(report_srvurl, target_element);
-                                                cslt_message_display("情報提供の処理を行いました", "message");
-                                            }
-                                        }
-                                        //this.classList.add("cslt_report_complete");
-                                    }
-                                }
-                                if (cslp_settings.oneclick_report_after_mode == '3') {
-                                    if (get_cookie_twid != tweet_info.user_data.user_id) {
-                                        if (cslp_settings.oneclick_developer_report == true) {
-                                            //開発者情報提供
-                                            if (!tweet_info?.is_user_data_only && btn_mode != "notification" && is_follow_page() == false) {
-                                                developer_spam_user_share(report_srvurl, target_element);
-                                                cslt_message_display("情報提供の処理を行いました", "message");
-                                            }
-                                        }
-                                        //const tweet_info = JSON.parse(target_element.getAttribute("cslt_tweet_info"));
-                                        //console.log(target_element.getAttribute("cslt_tweet_info"));
-                                        const mute_tweet_run = await new Promise((resolve) => {
-                                            mute_user(tweet_info.user_data.user_id, add_hide_user_list_scr_name, location.host).then((report_status) => {
-                                                resolve(report_status);
-                                            });
-                                        });
-                                        if (mute_tweet_run != true) {
-                                            this.classList.add("cslt_report_fail");
-                                        } else {
-                                            block_mute_result = true;
-                                        }
-                                        //ミュート済ユーザーIDを保存
-                                        if (mute_tweet_run == true) {
-                                            report_ids_temp(tweet_info.user_data.user_id, "block_mute");
-                                        }
-                                        //
-                                    } else {
-                                        document.querySelector('[id="layers"] div[role="group"] div div')?.click();
-                                        cslt_message_display("自身のツイートにこの操作はできません", "error");
-                                    }
-                                }
-                                if (cslp_settings.oneclick_report_after_mode == '4') {
-                                    if (get_cookie_twid != tweet_info.user_data.user_id) {
-                                        if (cslp_settings.oneclick_developer_report == true) {
-                                            //開発者情報提供
-                                            if (!tweet_info?.is_user_data_only && btn_mode != "notification" && is_follow_page() == false) {
-                                                developer_spam_user_share(report_srvurl, target_element);
-                                                cslt_message_display("情報提供の処理を行いました", "message");
-                                            }
-                                        }
-                                        //const tweet_info = JSON.parse(target_element.getAttribute("cslt_tweet_info"));
-                                        //console.log(target_element.getAttribute("cslt_tweet_info"));
-                                        const block_user_run = await new Promise((resolve) => {
-                                            block_user(tweet_info.user_data.user_id, add_hide_user_list_scr_name, location.host).then((resp) => {
-                                                resolve(resp);
-                                            });
-                                        });
-                                        /*if(block_user_run == true){
-                                            block_mute_result = true;
-                                        }*/
-                                        if (block_user_run != true) {
-                                            this.classList.add("cslt_report_fail");
-                                        } else {
-                                            block_mute_result = true;
-                                        }
-                                        //ブロック済ユーザーIDを保存
-                                        if (block_user_run == true) {
-                                            report_ids_temp(tweet_info.user_data.user_id, "block_mute");
-                                        }
-                                        //
-                                    } else {
-                                        document.querySelector('[id="layers"] div[role="group"] div div')?.click();
-                                        cslt_message_display("自身のツイートにこの操作はできません", "error");
-                                    }
-                                }
-                                //開発者情報提供は通知とユーザーページでは無効とする
-                                if(btn_mode != "notification" || btn_mode != "user_page"){
-                                    if (cslp_settings.oneclick_developer_report == true && cslp_settings.oneclick_report_after_mode == '5') {
-                                        //開発者情報提供
-                                        if (get_cookie_twid != tweet_info.user_data.user_id) {
-                                            //アカウント蓄積
-                                            //console.log(JSON.stringify(imp_account))
-                                            if (is_follow_page() == false) {
-                                                developer_spam_user_share(report_srvurl, target_element);
-                                                tweet_area_clear(target_element, "report_only");
-                                                cslt_message_display("情報提供の処理を行いました", "message");
-                                            }
-                                            //this.classList.add("cslt_report_complete");
-                                        } else {
-                                            document.querySelector('[id="layers"] div[role="group"] div div')?.click();
-                                            cslt_message_display("自身のツイートにこの操作はできません", "error");
-                                        }
-                                    }
-                                }
-                                //報告は失敗したが、ブロックミュートが成功した場合、一時保存から削除
-                                if (cslp_settings.oneclick_report == true || cslp_settings.oneclick_report_after_mode == '1' || cslp_settings.oneclick_report_after_mode == '2') {
-                                    if (report_result == false && block_mute_result == true) {
-                                        report_ids_temp(tweet_info.tweet_id, "fail_report_delete");
-                                        fail_report_success_bm = true;
-                                    }
-                                }
-                                //処理後にツイート非表示
-                                if (cslp_settings.oneclick_report == true || cslp_settings.oneclick_report_after_mode == '1' || cslp_settings.oneclick_report_after_mode == '2' || cslp_settings.oneclick_report_after_mode == '3' || cslp_settings.oneclick_report_after_mode == '4') {
-                                    if (fail_report_tweet_status_ids_regex.test(tweet_info.tweet_id) == false && report_result == true || fail_block_mute_user_ids_regex.test(tweet_info.tweet_id) == false && block_mute_result == true || fail_report_success_bm == true) {
-                                        //console.log(fail_report_tweet_status_ids_regex.test(tweet_info.tweet_id));
-                                        switch (btn_mode) {
-                                            case "notification":
-                                                cslt_message_display("通知のため、非表示処理はスキップされます", "message");
-                                                break;
-                                            case "user_page":
-                                                cslt_message_display("ブロック/ミュート処理は、再読み込みで反映を確認可能です", "message");
-                                                break;
-                                            default:
-                                                if (cslp_settings.oneclick_report == true && cslp_settings.oneclick_report_after_mode == '0') {
-                                                    tweet_area_clear(target_element, "report_only");
-                                                } else {
-                                                    tweet_area_clear(target_element, "mute_block");
-                                                }
-                                                break;
-                                        }
-                                        /*if(btn_mode != "notification"){
-                                            if (cslp_settings.oneclick_report == true && cslp_settings.oneclick_report_after_mode == '0') {
-                                                tweet_area_clear(target_element, "report_only");
-                                            } else {
-                                                tweet_area_clear(target_element, "mute_block");
-                                            }
-                                        }*/
-                                    }
-                                }
-                                //this.classList.add("cslt_report_complete");
-                            } else {
-                                document.querySelector('[id="layers"] div[role="group"] div div')?.click();
-                                cslt_message_display("自身のツイートにこの操作はできません", "error");
-                            }
-                        }
+                        await executeReportProcess(this, btn_mode, false, notification_user_page_data);
                     })
                 }
                 //URLコピー関数(ナイト系スパム関連。レガシー)
@@ -2423,6 +2056,384 @@ function main(filter_url, imp_filter_url) {
         console.error('List load error!', error);
     });
 }
+                /* 以下非表示以外の機能用関数 */
+                // 自動報告タイマー関連
+                let autoReportTimerSeconds = 15 * 60;
+                let autoReportInterval = null;
+
+                function updateAutoReportTimerUI() {
+                    let timerElem = document.getElementById("cslt_auto_report_timer");
+                    if (!timerElem && cslp_settings.auto_report) {
+                        document.body.insertAdjacentHTML("beforeend", `
+                            <div id="cslt_auto_report_timer" style="position: fixed; bottom: 10px; right: 10px; z-index: 10000; background: rgba(0,0,0,0.7); color: white; padding: 5px 10px; border-radius: 5px; font-family: sans-serif; font-size: 12px; pointer-events: none;">
+                                自動通報まで: <span id="cslt_timer_countdown">--:--</span>
+                            </div>
+                        `);
+                        timerElem = document.getElementById("cslt_auto_report_timer");
+                    }
+                    if (timerElem) {
+                        if (!cslp_settings.auto_report) {
+                            timerElem.style.display = "none";
+                            return;
+                        }
+                        timerElem.style.display = "block";
+                        const minutes = Math.floor(autoReportTimerSeconds / 60);
+                        const seconds = autoReportTimerSeconds % 60;
+                        document.getElementById("cslt_timer_countdown").textContent =
+                            `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+                    }
+                }
+
+                async function runAutoReport() {
+                    if (!cslp_settings.auto_report) return;
+
+                    const target_selector = `div[data-testid="cellInnerDiv"][cslt_tweet_info]:not([cslt_tweet_info_mytweet_flag="true"],[cslt_white_list_user],[cslt_temp_fail_report_flag="fail_tweet"])`;
+                    const candidate_tweets = Array.from(document.querySelectorAll(target_selector));
+
+                    let reportedCount = 0;
+                    for (const tweet_elem of candidate_tweets) {
+                        if (reportedCount >= 15) break;
+
+                        const tweet_info = JSON.parse(tweet_elem.getAttribute("cslt_tweet_info"));
+                        // すでに通報済みか再度チェック
+                        if (report_tweet_status_ids_regex.test(tweet_info.tweet_id) ||
+                            block_mute_user_ids_regex.test(tweet_info.user_data.user_id)) {
+                            continue;
+                        }
+
+                        await executeReportProcess(tweet_elem, "nomal", true, null);
+                        reportedCount++;
+                        // レートリミット回避のため少し間を空ける
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                    }
+
+                    autoReportTimerSeconds = 15 * 60;
+                }
+
+                if (cslp_settings.auto_report) {
+                    runAutoReport();
+                    autoReportInterval = setInterval(() => {
+                        autoReportTimerSeconds--;
+                        if (autoReportTimerSeconds <= 0) {
+                            runAutoReport();
+                        }
+                        updateAutoReportTimerUI();
+                    }, 1000);
+                    updateAutoReportTimerUI();
+                }
+
+                async function executeReportProcess(input_element, btn_mode, isAuto, notification_user_page_data) {
+                    let get_cookie_twid = null;
+                    if (is_use_cookie_mode()) {
+                        get_cookie_twid = decodeURIComponent(document.cookie.split(";").find(cookie => /twid=/.test(cookie))).replace("twid=u=", "");
+                    } else {
+                        get_cookie_twid = await new Promise((resolve) => {
+                            chrome.runtime.sendMessage({ message: { mode: "login_userid_get", target: { target_host_mode: location.host } } }, (response) => {
+                                resolve(decodeURIComponent(response).replace("u=", ""));
+                            });
+                        });
+                    }
+
+                    let report_confirm = false;
+                    if (!isAuto && cslp_settings.oneclick_report_confirm == true) {
+                        if (confirm("操作を実行しますか?")) {
+                            report_confirm = true;
+                        }
+                    } else {
+                        report_confirm = true;
+                    }
+
+                    if (report_confirm == true) {
+                        const report_srvurl = cslp_settings.oneclick_developer_reportsrv_url;
+                        const target_element = input_element.closest('[data-testid="cellInnerDiv"]');
+                        let tweet_info = null;
+                        switch (btn_mode) {
+                            case "notification":
+                                tweet_info = notification_user_page_data;
+                                break;
+                            case "user_page":
+                                tweet_info = notification_user_page_data;
+                                break;
+                            default:
+                                tweet_info = JSON.parse(target_element.getAttribute("cslt_tweet_info"));
+                                break;
+                        }
+
+                        let report_result = false;
+                        let block_mute_result = false;
+                        let fail_report_success_bm = false;
+                        let add_hide_user_list_scr_name = null;
+                        if (cslp_settings.oneclick_report_add_cslt_hideuser) {
+                            add_hide_user_list_scr_name = tweet_info.user_data.scr_name;
+                        }
+
+                        if (get_cookie_twid != tweet_info.user_data.user_id || cslp_settings.oneclick_report_after_mode == '3' || cslp_settings.oneclick_report_after_mode == '4' || cslp_settings.oneclick_report_after_mode == '5') {
+                            if (cslp_settings.oneclick_report == true) {
+                                if (Number(cslp_settings.oneclick_report_after_mode) <= 2) {
+                                    if (window.location.pathname.split("/")[2] != 'communities') {
+                                        const report_tweet_run = await new Promise((resolve) => {
+                                            if (!is_follow_page()) {
+                                                switch (btn_mode) {
+                                                    case "notification":
+                                                        report_tweet(cslp_settings.oneclick_report_option, target_element, tweet_info.user_data.user_id, location.host, "user", true, tweet_info).then((report_status) => {
+                                                            resolve(report_status);
+                                                        });
+                                                        break;
+                                                    case "user_page":
+                                                        report_tweet(cslp_settings.oneclick_report_option, target_element, tweet_info.user_data.user_id, location.host, "none", true, tweet_info).then((report_status) => {
+                                                            resolve(report_status);
+                                                        });
+                                                        break;
+                                                    default:
+                                                        switch (cslp_settings.oneclick_report_target_mode) {
+                                                            case "0":
+                                                                if (tweet_info?.is_user_data_only != undefined) {
+                                                                    if (!tweet_info.is_user_data_only) {
+                                                                        if (!isAuto) cslt_message_display("投稿の報告のみを行います", "message");
+                                                                        report_tweet(cslp_settings.oneclick_report_option, target_element, tweet_info.tweet_id, location.host, "none", false, null).then((report_status) => {
+                                                                            resolve(report_status);
+                                                                        });
+                                                                    } else {
+                                                                        if (!isAuto) cslt_message_display("ユーザーの報告のみを行います", "message");
+                                                                        report_tweet(cslp_settings.oneclick_report_option, target_element, tweet_info.user_data.user_id, location.host, "user", false, null).then((report_status) => {
+                                                                            resolve(report_status);
+                                                                        });
+                                                                    }
+                                                                }
+                                                                break;
+                                                            case "1":
+                                                                if (!isAuto) cslt_message_display("ユーザーの報告のみを行います", "message");
+                                                                report_tweet(cslp_settings.oneclick_report_option, target_element, tweet_info.user_data.user_id, location.host, "user", false, null).then((report_status) => {
+                                                                    resolve(report_status);
+                                                                });
+                                                                break;
+                                                            case "2":
+                                                                if (tweet_info?.is_user_data_only != undefined) {
+                                                                    if (!tweet_info.is_user_data_only) {
+                                                                        report_tweet(cslp_settings.oneclick_report_option, target_element, tweet_info.tweet_id, location.host, "none", false, null).then((report_status) => {
+                                                                            if (!isAuto) cslt_message_display("ユーザーの報告を行います", "message");
+                                                                            report_tweet(cslp_settings.oneclick_report_option, target_element, tweet_info.user_data.user_id, location.host, "user", false, null).then((report_status) => {
+                                                                                resolve(report_status);
+                                                                            });
+                                                                        });
+                                                                    } else {
+                                                                        if (!isAuto) cslt_message_display("ユーザーの報告のみを行います", "message");
+                                                                        report_tweet(cslp_settings.oneclick_report_option, target_element, tweet_info.user_data.user_id, location.host, "user", false, null).then((report_status) => {
+                                                                            resolve(report_status);
+                                                                        });
+                                                                    }
+                                                                }
+                                                                break;
+                                                            default:
+                                                                report_tweet(cslp_settings.oneclick_report_option, target_element, tweet_info.tweet_id, location.host, "none", false, null).then((report_status) => {
+                                                                    resolve(report_status);
+                                                                });
+                                                                break;
+                                                        }
+                                                        break;
+                                                }
+                                            } else {
+                                                if (!isAuto) cslt_message_display("ユーザーの報告のみを行います", "message");
+                                                report_tweet(cslp_settings.oneclick_report_option, target_element, tweet_info.user_data.user_id, location.host, "user", false, null).then((report_status) => {
+                                                    resolve(report_status);
+                                                });
+                                            }
+                                        });
+                                        if (report_tweet_run != true) {
+                                            const btn = target_element.querySelector(".cslt_report_icon");
+                                            if (btn) btn.classList.add("cslt_report_fail");
+                                        } else {
+                                            report_result = true;
+                                        }
+                                    } else {
+                                        const report_tweet_run = await new Promise((resolve) => {
+                                            switch (cslp_settings.oneclick_report_target_mode) {
+                                                case "0":
+                                                    if (!isAuto) cslt_message_display("投稿の報告のみを行います", "message");
+                                                    report_tweet_community(cslp_settings.oneclick_report_option, target_element, tweet_info.tweet_id, location.host).then((report_status) => {
+                                                        resolve(report_status);
+                                                    });
+                                                    break;
+                                                case "1":
+                                                    if (!isAuto) cslt_message_display("ユーザーの報告のみを行います", "message");
+                                                    report_tweet(cslp_settings.oneclick_report_option, target_element, tweet_info.user_data.user_id, location.host, "user", false, null).then((report_status) => {
+                                                        resolve(report_status);
+                                                    });
+                                                    break;
+                                                case "2":
+                                                    if (tweet_info?.is_user_data_only != undefined) {
+                                                        if (!tweet_info.is_user_data_only) {
+                                                            report_tweet_community(cslp_settings.oneclick_report_option, target_element, tweet_info.tweet_id, location.host).then((report_status) => {
+                                                                report_tweet(cslp_settings.oneclick_report_option, target_element, tweet_info.user_data.user_id, location.host, "user", false, null).then((report_status) => {
+                                                                    resolve(report_status);
+                                                                });
+                                                            });
+                                                        } else {
+                                                            if (!isAuto) cslt_message_display("ユーザーの報告のみを行います", "message");
+                                                            report_tweet(cslp_settings.oneclick_report_option, target_element, tweet_info.user_data.user_id, location.host, "user", false, null).then((report_status) => {
+                                                                resolve(report_status);
+                                                            });
+                                                        }
+                                                    }
+                                                    break;
+                                                default:
+                                                    report_tweet_community(cslp_settings.oneclick_report_option, target_element, tweet_info.tweet_id, location.host).then((report_status) => {
+                                                        resolve(report_status);
+                                                    });
+                                                    break;
+                                            }
+                                        });
+                                        if (report_tweet_run != true) {
+                                            const btn = target_element.querySelector(".cslt_report_icon");
+                                            if (btn) btn.classList.add("cslt_report_fail");
+                                        } else {
+                                            report_result = true;
+                                        }
+                                    }
+
+                                    if (report_result == true) {
+                                        report_ids_temp(tweet_info.tweet_id, "report");
+                                    }
+
+                                    if (cslp_settings.oneclick_report_after_mode == "1") {
+                                        const mute_tweet_run = await new Promise((resolve) => {
+                                            mute_user(tweet_info.user_data.user_id, add_hide_user_list_scr_name, location.host).then((report_status) => {
+                                                resolve(report_status);
+                                            });
+                                        });
+                                        if (mute_tweet_run != true) {
+                                            const btn = target_element.querySelector(".cslt_report_icon");
+                                            if (btn) btn.classList.add("cslt_report_fail");
+                                        } else {
+                                            block_mute_result = true;
+                                            report_ids_temp(tweet_info.user_data.user_id, "block_mute");
+                                        }
+                                    }
+                                    if (cslp_settings.oneclick_report_after_mode == "2") {
+                                        const block_user_run = await new Promise((resolve) => {
+                                            block_user(tweet_info.user_data.user_id, add_hide_user_list_scr_name, location.host).then((resp) => {
+                                                resolve(resp);
+                                            });
+                                        });
+                                        if (block_user_run == true) {
+                                            block_mute_result = true;
+                                            report_ids_temp(tweet_info.user_data.user_id, "block_mute");
+                                        } else {
+                                            const btn = target_element.querySelector(".cslt_report_icon");
+                                            if (btn) btn.classList.add("cslt_report_fail");
+                                        }
+                                    }
+                                    if (cslp_settings.oneclick_developer_report == true) {
+                                        if (!tweet_info?.is_user_data_only && btn_mode != "notification" && is_follow_page() == false) {
+                                            developer_spam_user_share(report_srvurl, target_element);
+                                            if (!isAuto) cslt_message_display("情報提供の処理を行いました", "message");
+                                        }
+                                    }
+                                }
+                            }
+                            if (cslp_settings.oneclick_report_after_mode == '3') {
+                                if (get_cookie_twid != tweet_info.user_data.user_id) {
+                                    if (cslp_settings.oneclick_developer_report == true) {
+                                        if (!tweet_info?.is_user_data_only && btn_mode != "notification" && is_follow_page() == false) {
+                                            developer_spam_user_share(report_srvurl, target_element);
+                                            if (!isAuto) cslt_message_display("情報提供の処理を行いました", "message");
+                                        }
+                                    }
+                                    const mute_tweet_run = await new Promise((resolve) => {
+                                        mute_user(tweet_info.user_data.user_id, add_hide_user_list_scr_name, location.host).then((report_status) => {
+                                            resolve(report_status);
+                                        });
+                                    });
+                                    if (mute_tweet_run != true) {
+                                        const btn = target_element.querySelector(".cslt_report_icon");
+                                        if (btn) btn.classList.add("cslt_report_fail");
+                                    } else {
+                                        block_mute_result = true;
+                                        report_ids_temp(tweet_info.user_data.user_id, "block_mute");
+                                    }
+                                } else {
+                                    if (!isAuto) {
+                                        document.querySelector('[id="layers"] div[role="group"] div div')?.click();
+                                        cslt_message_display("自身のツイートにこの操作はできません", "error");
+                                    }
+                                }
+                            }
+                            if (cslp_settings.oneclick_report_after_mode == '4') {
+                                if (get_cookie_twid != tweet_info.user_data.user_id) {
+                                    if (cslp_settings.oneclick_developer_report == true) {
+                                        if (!tweet_info?.is_user_data_only && btn_mode != "notification" && is_follow_page() == false) {
+                                            developer_spam_user_share(report_srvurl, target_element);
+                                            if (!isAuto) cslt_message_display("情報提供の処理を行いました", "message");
+                                        }
+                                    }
+                                    const block_user_run = await new Promise((resolve) => {
+                                        block_user(tweet_info.user_data.user_id, add_hide_user_list_scr_name, location.host).then((resp) => {
+                                            resolve(resp);
+                                        });
+                                    });
+                                    if (block_user_run != true) {
+                                        const btn = target_element.querySelector(".cslt_report_icon");
+                                        if (btn) btn.classList.add("cslt_report_fail");
+                                    } else {
+                                        block_mute_result = true;
+                                        report_ids_temp(tweet_info.user_data.user_id, "block_mute");
+                                    }
+                                } else {
+                                    if (!isAuto) {
+                                        document.querySelector('[id="layers"] div[role="group"] div div')?.click();
+                                        cslt_message_display("自身のツイートにこの操作はできません", "error");
+                                    }
+                                }
+                            }
+                            if (btn_mode != "notification" || btn_mode != "user_page") {
+                                if (cslp_settings.oneclick_developer_report == true && cslp_settings.oneclick_report_after_mode == '5') {
+                                    if (get_cookie_twid != tweet_info.user_data.user_id) {
+                                        if (is_follow_page() == false) {
+                                            developer_spam_user_share(report_srvurl, target_element);
+                                            tweet_area_clear(target_element, "report_only");
+                                            if (!isAuto) cslt_message_display("情報提供の処理を行いました", "message");
+                                        }
+                                    } else {
+                                        if (!isAuto) {
+                                            document.querySelector('[id="layers"] div[role="group"] div div')?.click();
+                                            cslt_message_display("自身のツイートにこの操作はできません", "error");
+                                        }
+                                    }
+                                }
+                            }
+                            if (cslp_settings.oneclick_report == true || cslp_settings.oneclick_report_after_mode == '1' || cslp_settings.oneclick_report_after_mode == '2') {
+                                if (report_result == false && block_mute_result == true) {
+                                    report_ids_temp(tweet_info.tweet_id, "fail_report_delete");
+                                    fail_report_success_bm = true;
+                                }
+                            }
+                            if (cslp_settings.oneclick_report == true || cslp_settings.oneclick_report_after_mode == '1' || cslp_settings.oneclick_report_after_mode == '2' || cslp_settings.oneclick_report_after_mode == '3' || cslp_settings.oneclick_report_after_mode == '4') {
+                                if (fail_report_tweet_status_ids_regex.test(tweet_info.tweet_id) == false && report_result == true || fail_block_mute_user_ids_regex.test(tweet_info.tweet_id) == false && block_mute_result == true || fail_report_success_bm == true) {
+                                    switch (btn_mode) {
+                                        case "notification":
+                                            if (!isAuto) cslt_message_display("通知のため、非表示処理はスキップされます", "message");
+                                            break;
+                                        case "user_page":
+                                            if (!isAuto) cslt_message_display("ブロック/ミュート処理は、再読み込みで反映を確認可能です", "message");
+                                            break;
+                                        default:
+                                            if (cslp_settings.oneclick_report == true && cslp_settings.oneclick_report_after_mode == '0') {
+                                                tweet_area_clear(target_element, "report_only");
+                                            } else {
+                                                tweet_area_clear(target_element, "mute_block");
+                                            }
+                                            break;
+                                    }
+                                }
+                            }
+                        } else {
+                            if (!isAuto) {
+                                document.querySelector('[id="layers"] div[role="group"] div div')?.click();
+                                cslt_message_display("自身のツイートにこの操作はできません", "error");
+                            }
+                        }
+                    }
+                }
 /*報告やその他追加機能用の関数*/
 //報告関数
 async function report_tweet(report_mode, report_element, report_twid, host_mode, reply_report_target, report_notification_user_page, notification_users_data) {
