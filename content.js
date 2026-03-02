@@ -1732,7 +1732,15 @@ function main(filter_url, imp_filter_url) {
                     }
                     //報告ボタン動作
                     document.getElementById(random_id)?.addEventListener("click", async function () {
-                        await executeReportProcess(this, btn_mode, false, notification_user_page_data);
+                        if (cslp_settings.auto_report) {
+                            if (confirm("このツイートのみを通報しますか？\n（キャンセルを押すと、現在表示されているページの自動通報（15個）を開始します）")) {
+                                await executeReportProcess(this, btn_mode, false, notification_user_page_data);
+                            } else {
+                                await runAutoReport();
+                            }
+                        } else {
+                            await executeReportProcess(this, btn_mode, false, notification_user_page_data);
+                        }
                     })
                 }
                 //URLコピー関数(ナイト系スパム関連。レガシー)
@@ -2086,9 +2094,11 @@ function main(filter_url, imp_filter_url) {
 
                 async function runAutoReport() {
                     if (!cslp_settings.auto_report) return;
+                    console.log("CSLT: runAutoReport started");
 
                     const target_selector = `div[data-testid="cellInnerDiv"][cslt_tweet_info]:not([cslt_tweet_info_mytweet_flag="true"],[cslt_white_list_user],[cslt_temp_fail_report_flag="fail_tweet"])`;
                     const candidate_tweets = Array.from(document.querySelectorAll(target_selector));
+                    console.log(`CSLT: Found ${candidate_tweets.length} candidate tweets for auto-report`);
 
                     let reportedCount = 0;
                     for (const tweet_elem of candidate_tweets) {
@@ -2101,6 +2111,7 @@ function main(filter_url, imp_filter_url) {
                             continue;
                         }
 
+                        console.log(`CSLT: Auto-reporting tweet ${tweet_info.tweet_id}`);
                         await executeReportProcess(tweet_elem, "nomal", true, null);
                         reportedCount++;
                         // レートリミット回避のため少し間を空ける
@@ -2144,6 +2155,7 @@ function main(filter_url, imp_filter_url) {
                     }
 
                     if (report_confirm == true) {
+                        console.log(`CSLT: executeReportProcess starting for ${btn_mode}, isAuto: ${isAuto}`);
                         const report_srvurl = cslp_settings.oneclick_developer_reportsrv_url;
                         const target_element = input_element.closest('[data-testid="cellInnerDiv"]');
                         let tweet_info = null;
@@ -2242,6 +2254,8 @@ function main(filter_url, imp_filter_url) {
                                         if (report_tweet_run != true) {
                                             const btn = target_element.querySelector(".cslt_report_icon");
                                             if (btn) btn.classList.add("cslt_report_fail");
+                                            console.error(`CSLT: Report failed for tweet ${tweet_info.tweet_id}`);
+                                            if (!isAuto) cslt_message_display("通報に失敗しました。詳細はコンソールログを確認してください。", "error");
                                         } else {
                                             report_result = true;
                                         }
@@ -2286,6 +2300,8 @@ function main(filter_url, imp_filter_url) {
                                         if (report_tweet_run != true) {
                                             const btn = target_element.querySelector(".cslt_report_icon");
                                             if (btn) btn.classList.add("cslt_report_fail");
+                                            console.error(`CSLT: Community report failed for tweet ${tweet_info.tweet_id}`);
+                                            if (!isAuto) cslt_message_display("通報に失敗しました(コミュニティ)。詳細はコンソールログを確認してください。", "error");
                                         } else {
                                             report_result = true;
                                         }
