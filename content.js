@@ -292,7 +292,7 @@ function main(filter_url, imp_filter_url) {
         let old_user_page_user_data_obj = null;
         //設定
         let cslp_settings = null;
-        chrome.storage.local.get("cslp_settings", function (value) {
+chrome.storage.local.get("cslp_settings", function (value) {
             let cslp_update_flag = null;
             if (value.cslp_settings != undefined) {
                 if (JSON.parse(value.cslp_settings).version != chrome.runtime.getManifest().version) {
@@ -2933,7 +2933,7 @@ async function mute_user(user_id, screen_name, host_mode) {
                 resolve(false);
             });
         });
-    });
+});
     //CSLT側のリストへ追加
     if (screen_name != null || screen_name != undefined) {
         await add_cslt_hide_user_list(screen_name);
